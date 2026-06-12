@@ -1,93 +1,508 @@
 import streamlit as st
 import yfinance as yf
 import pandas as pd
-import requests
-from bs4 import BeautifulSoup
 
-# 網頁基本設定（手機版優化）
-st.set_page_config(page_title="Phoebe 投資系統", layout="centered")
-st.title("📱 Phoebe AI 投資決策系統")
+# 1. 網頁初始設定：強制開啟寬螢幕、標題與小圖示
+st.set_page_config(page_title="Phoebe 頂級投資儀表板", page_icon="📈", layout="wide")
 
-# 導覽標籤頁
-tab1, tab2, tab3 = st.tabs(["📊 儀表板 & 財報", "🤖 AI 智慧對話", "📰 國際財報情勢"])
+# 2. 注入自訂高級 UI/UX CSS 樣式
+st.markdown("""
+    <style>
+    /* 全域字體優化 */
+    html, body, [class*="css"] {
+        font-family: "Helvetica Neue", Helvetica, Arial, "PingFang TC", "Microsoft JhengHei", sans-serif;
+    }
+    /* 區塊容器美化 */
+    div.stBox {
+        border-radius: 12px;
+        padding: 1.5rem;
+        background-color: #1E293B;
+        border: 1px solid #334155;
+        margin-bottom: 1rem;
+    }
+    /* 頂部標題美化 */
+    .main-title {
+        font-size: 2.5rem;
+        font-weight: 800;
+        background: linear-gradient(135deg, #38BDF8, #34D399);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        margin-bottom: 0.5rem;
+    }
+    /* 副標題 */
+    .sub-title {
+        color: #94A3B8;
+        font-size: 1rem;
+        margin-bottom: 2rem;
+    }
+    </style>
+""", unsafe_allow_html=True)
 
-# ================= 第一頁：儀表板 & 財報 =================
+# 頂部精美標頭
+st.markdown('<p class="main-title">📊 Phoebe 頂級投資儀表板</p>', unsafe_allow_html=True)
+st.markdown('<p class="sub-title">全球核心資產與原廠一手財報數據追蹤</p>', unsafe_allow_html=True)
+
+# ==============================================================================
+# SECTION 1: 美股大盤指標 VOO 觀測與買進評估
+# ==============================================================================
+st.markdown("### 🇺🇸 全球大盤核心觀測 (VOO)")
+
+# 抓取 VOO 數據
+voo_ticker = yf.Ticker("VOO")
+voo_info = voo_ticker.info
+# 抓取歷史數據計算 KD 指標
+voo_hist = voo_ticker.history(period="3mo")
+
+if not voo_hist.empty:
+    # 簡略計算日 KD (9, 3, 3) 用於買進參考
+    low_9 = voo_hist['Low'].rolling(window=9).min()
+    high_9 = voo_hist['High'].rolling(window=9).max()
+    rsv = ((voo_hist['Close'] - low_9) / (high_9 - low_9)) * 100
+    
+    k_list = []
+    d_list = []
+    current_k = 50
+    current_d = 50
+    for r in rsv:
+        if pd.isna(r):
+            k_list.append(None)
+            d_list.append(None)
+        else:
+            current_k = (2/3) * current_k + (1/3) * r
+            current_d = (2/3) * current_d + (1/3) * current_k
+            k_list.append(current_k)
+            d_list.append(current_d)
+            
+    latest_k = current_k
+    latest_d = current_d
+    
+    # 計算漲跌
+    current_price = voo_hist['Close'].iloc[-1]
+    prev_price = voo_hist['Close'].iloc[-2]
+    price_change = current_price - prev_price
+    price_change_pct = (price_change / prev_price) * 100
+    
+    # 決定買進建議資訊
+    if latest_k < 20:
+        action_status = "🔥 買進訊號強烈 (KD低檔超賣)"
+        action_color = "red"
+        action_desc = "目前 VOO 技術指標處於低檔相對安全區，通常為中長期投資人進場的黃金時機。"
+    elif latest_k > 80:
+        action_status = "⚠️ 暫緩追高 (KD高檔超買)"
+        action_color = "orange"
+        action_desc = "目前技術指標處於高檔過熱區，建議若無急迫性可靜待拉回再布局。"
+    else:
+        action_status = "⚖️ 穩定配置區 (KD訊號中性)"
+        action_color = "green"
+        action_desc = "目前指數運作正常，處於合理波動範圍。適合實施定時定額或按原計畫分批布局。"
+
+    # VOO 資訊卡片區
+    c1, c2, c3 = st.columns([1, 1, 2])
+    with c1:
+        st.metric(
+            label="VOO 最新股價", 
+            value=f"${current_price:.2f}", 
+            delta=f"{price_change:+.2f} ({price_change_pct:+.2f}%)"
+        )
+    with c2:
+        st.metric(
+            label="技術指標 (日K / 日D)", 
+            value=f"{latest_k:.1f} / {latest_d:.1f}"
+        )
+    with c3:
+        # 使用 HTML 渲染好看的買進狀態盒
+        st.markdown(
+            f"""
+            <div style="background-color: #0F172A; border-left: 5px solid {action_color}; padding: 12px; border-radius: 6px;">
+                <b style="font-size: 1.1rem; color: white;">目前操作評估：{action_status}</b><br>
+                <span style="font-size: 0.9rem; color: #94A3B8;">{action_desc}</span>
+            </div>
+            """, 
+            unsafe_allow_html=True
+        )
+else:
+    st.error("無法取得 VOO 即時數據，請稍後再試。")
+
+st.markdown("<br><hr style='border-color: #334155;'><br>", unsafe_allow_html=True)
+
+# ==============================================================================
+# SECTION 2: 個股原廠第一手財報數據
+# ==============================================================================
+st.markdown("### 🔍 個股原廠第一手數據查詢")
+
+ticker_input = st.text_input("請輸入股票代號 (台股請加 .TW，例如：2330.TW)", "2330.TW")
+ticker = yf.Ticker(ticker_input)
+
+# 基本面核心三大數字指標
+try:
+    info = ticker.info
+    if info:
+        m1, m2, m3, m4 = st.columns(4)
+        with m1:
+            st.metric("目前本益比 (PE)", f"{info.get('trailingPE', '暫無')}")
+        with m2:
+            st.metric("每股盈餘 (EPS)", f"${info.get('trailingEps', '暫無')}")
+        with m3:
+            st.metric("利潤率 (Profit Margin)", f"{info.get('profitMargins', 0)*100:.2f}%" if info.get('profitMargins') else "暫無")
+        with m4:
+            st.metric("股東權益報酬率 (ROE)", f"{info.get('returnOnEquity', 0)*100:.2f}%" if info.get('returnOnEquity') else "暫無")
+except:
+    st.warning("部分即時核心指標暫時無法讀取。")
+
+# 官方檔案下載直達車
+pure_code = ticker_input.split(".")[0]
+st.markdown("#### 📂 官方原始檔案直達鏈結")
+col_link1, col_link2 = st.columns(2)
+with col_link1:
+    st.markdown(f"**🏢 台灣公開資訊觀測站 (MOPS)**\n\n[👉 點我直接進入官方網站查重大訊息](https://mops.twse.com.tw/mops/web/t05st01)")
+with col_link2:
+    st.markdown(f"**📊 官方法說會簡報 (Investor Relations)**\n\n[👉 點我直接 Google 搜尋原廠 PDF 簡報](https://www.google.com/search?q={pure_code}+Investor+Relations+法說會簡報+filetype:pdf)")
+
+# 原始大數據表格分頁
+st.markdown("#### 🏛️ 申報原始財務三表 (無任何加工處理)")
+tab1, tab2, tab3 = st.tabs(["損益表 (Income Statement)", "資產負債表 (Balance Sheet)", "現金流量表 (Cash Flow)"])
+
 with tab1:
-    st.header("股價與核心財報查詢")
-    
-    # 讓使用者輸入股票代號（支援台股與美股）
-    # 台股請輸入 2330.TW，美股輸入 AAPL
-    stock_code = st.text_input("輸入股票代號（例如台股：2330.TW / 美股：AAPL）", "2330.TW")
-    
-    if stock_code:
-        try:
-            stock = yf.Ticker(stock_code)
-            info = stock.info
-            history = stock.history(period="6mo") # 抓取半年歷史數據
-            
-            # 1. 顯示即時現價
-            current_price = history['Close'].iloc[-1]
-            st.metric(label=f"{info.get('longName', stock_code)} 當前股價", value=f"${current_price:.2f}")
-            
-            # 2. 核心指標：ROE 與 本益比
-            st.subheader("💡 核心財報指標體檢")
-            col1, col2 = st.columns(2)
-            
-            # 抓取 ROE
-            roe = info.get('returnOnEquity', None)
-            roe_display = f"{roe * 100:.2f}%" if roe else "暫無數據"
-            with col1:
-                st.metric(label="ROE (股東權益報酬率) [標準 > 15%]", value=roe_display)
-                if roe and roe > 0.15:
-                    st.success("🔥 賺錢效率極佳！")
-                elif roe:
-                    st.warning("⚠️ 賺錢效率稍嫌落後。")
-            
-            # 抓取本益比
-            pe = info.get('trailingPE', None)
-            pe_display = f"{pe:.2f} 倍" if pe else "暫無數據"
-            with col2:
-                st.metric(label="本益比 (P/E Ratio)", value=pe_display)
-            
-            # 3. 股票圖形：K線走勢圖
-            st.subheader("📈 半年走勢圖與均線 (K線趨勢)")
-            # 計算 20 日均線 (月線)
-            history['MA20'] = history['Close'].rolling(window=20).mean()
-            st.line_chart(history[['Close', 'MA20']])
-            st.caption("藍線：收盤價，橘線：20日移動平均線（月線多空分水嶺）")
-            
-        except Exception as e:
-            st.error(f"資料讀取失敗，請檢查代號是否正確。錯誤訊息: {e}")
-
-# ================= 第二頁：AI 智慧對話 =================
+    st.dataframe(ticker.quarterly_financials, use_container_width=True)
 with tab2:
-    st.header("🤖 免費 AI 投資分析師")
-    st.write("在這裡直接輸入你想問的股票問題：")
-    
-    user_question = st.text_input("向 AI 提問：", placeholder="例如：請幫我分析 2330 目前的本益比合理嗎？")
-    
-    if st.button("送出分析請求"):
-        if user_question:
-            with st.spinner("AI 正在分析財報中..."):
-                # 這裡使用免費免密鑰的 DuckDuckGo AI 整合接口（免申請 API Key）
-                try:
-                    api_url = "https://html.duckduckgo.com/html/"
-                    # 模擬網頁搜尋與基本 AI 回應效果
-                    st.info("💡 系統提示：請將以下問題複製，點擊下方按鈕可直接開啟免登入 AI 進行深度對話！")
-                    st.code(user_question)
-                    # 提供一個一鍵前往免費 AI 的快速連結
-                    st.page_link("https://chatgpt.com/", label="點我打開 ChatGPT 免費即時對話", icon="🚀")
-                except Exception as e:
-                    st.error("對話模組連線異常")
-
-# ================= 第三頁：國際財報情勢 =================
+    st.dataframe(ticker.quarterly_balance_sheet, use_container_width=True)
 with tab3:
-    st.header("📰 國際財報與財經情勢")
+    st.dataframe(ticker.quarterly_cashflow, use_container_width=True)import streamlit as st
+import yfinance as yf
+import pandas as pd
+
+# 1. 網頁初始設定：強制開啟寬螢幕、標題與小圖示
+st.set_page_config(page_title="Phoebe 頂級投資儀表板", page_icon="📈", layout="wide")
+
+# 2. 注入自訂高級 UI/UX CSS 樣式
+st.markdown("""
+    <style>
+    /* 全域字體優化 */
+    html, body, [class*="css"] {
+        font-family: "Helvetica Neue", Helvetica, Arial, "PingFang TC", "Microsoft JhengHei", sans-serif;
+    }
+    /* 區塊容器美化 */
+    div.stBox {
+        border-radius: 12px;
+        padding: 1.5rem;
+        background-color: #1E293B;
+        border: 1px solid #334155;
+        margin-bottom: 1rem;
+    }
+    /* 頂部標題美化 */
+    .main-title {
+        font-size: 2.5rem;
+        font-weight: 800;
+        background: linear-gradient(135deg, #38BDF8, #34D399);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        margin-bottom: 0.5rem;
+    }
+    /* 副標題 */
+    .sub-title {
+        color: #94A3B8;
+        font-size: 1rem;
+        margin-bottom: 2rem;
+    }
+    </style>
+""", unsafe_allow_html=True)
+
+# 頂部精美標頭
+st.markdown('<p class="main-title">📊 Phoebe 頂級投資儀表板</p>', unsafe_allow_html=True)
+st.markdown('<p class="sub-title">全球核心資產與原廠一手財報數據追蹤</p>', unsafe_allow_html=True)
+
+# ==============================================================================
+# SECTION 1: 美股大盤指標 VOO 觀測與買進評估
+# ==============================================================================
+st.markdown("### 🇺🇸 全球大盤核心觀測 (VOO)")
+
+# 抓取 VOO 數據
+voo_ticker = yf.Ticker("VOO")
+voo_info = voo_ticker.info
+# 抓取歷史數據計算 KD 指標
+voo_hist = voo_ticker.history(period="3mo")
+
+if not voo_hist.empty:
+    # 簡略計算日 KD (9, 3, 3) 用於買進參考
+    low_9 = voo_hist['Low'].rolling(window=9).min()
+    high_9 = voo_hist['High'].rolling(window=9).max()
+    rsv = ((voo_hist['Close'] - low_9) / (high_9 - low_9)) * 100
     
-    # 內建 Bloomberg 財經與台灣 Yahoo 股市財報直達連結
-    st.subheader("🇺🇸 全球市場情勢 (Bloomberg)")
-    st.caption("點擊下方按鈕，在手機上直接閱讀當日彭博財經頭條：")
-    st.page_link("https://www.bloomberg.com", label="瀏覽 Bloomberg 官方網站", icon="🌐")
+    k_list = []
+    d_list = []
+    current_k = 50
+    current_d = 50
+    for r in rsv:
+        if pd.isna(r):
+            k_list.append(None)
+            d_list.append(None)
+        else:
+            current_k = (2/3) * current_k + (1/3) * r
+            current_d = (2/3) * current_d + (1/3) * current_k
+            k_list.append(current_k)
+            d_list.append(current_d)
+            
+    latest_k = current_k
+    latest_d = current_d
     
-    st.subheader("🇹🇼 台股詳細財報 (Yahoo 股市)")
-    st.page_link("https://tw.stock.yahoo.com/class", label="瀏覽台灣 Yahoo 股市財報專區", icon="📊")
+    # 計算漲跌
+    current_price = voo_hist['Close'].iloc[-1]
+    prev_price = voo_hist['Close'].iloc[-2]
+    price_change = current_price - prev_price
+    price_change_pct = (price_change / prev_price) * 100
+    
+    # 決定買進建議資訊
+    if latest_k < 20:
+        action_status = "🔥 買進訊號強烈 (KD低檔超賣)"
+        action_color = "red"
+        action_desc = "目前 VOO 技術指標處於低檔相對安全區，通常為中長期投資人進場的黃金時機。"
+    elif latest_k > 80:
+        action_status = "⚠️ 暫緩追高 (KD高檔超買)"
+        action_color = "orange"
+        action_desc = "目前技術指標處於高檔過熱區，建議若無急迫性可靜待拉回再布局。"
+    else:
+        action_status = "⚖️ 穩定配置區 (KD訊號中性)"
+        action_color = "green"
+        action_desc = "目前指數運作正常，處於合理波動範圍。適合實施定時定額或按原計畫分批布局。"
+
+    # VOO 資訊卡片區
+    c1, c2, c3 = st.columns([1, 1, 2])
+    with c1:
+        st.metric(
+            label="VOO 最新股價", 
+            value=f"${current_price:.2f}", 
+            delta=f"{price_change:+.2f} ({price_change_pct:+.2f}%)"
+        )
+    with c2:
+        st.metric(
+            label="技術指標 (日K / 日D)", 
+            value=f"{latest_k:.1f} / {latest_d:.1f}"
+        )
+    with c3:
+        # 使用 HTML 渲染好看的買進狀態盒
+        st.markdown(
+            f"""
+            <div style="background-color: #0F172A; border-left: 5px solid {action_color}; padding: 12px; border-radius: 6px;">
+                <b style="font-size: 1.1rem; color: white;">目前操作評估：{action_status}</b><br>
+                <span style="font-size: 0.9rem; color: #94A3B8;">{action_desc}</span>
+            </div>
+            """, 
+            unsafe_allow_html=True
+        )
+else:
+    st.error("無法取得 VOO 即時數據，請稍後再試。")
+
+st.markdown("<br><hr style='border-color: #334155;'><br>", unsafe_allow_html=True)
+
+# ==============================================================================
+# SECTION 2: 個股原廠第一手財報數據
+# ==============================================================================
+st.markdown("### 🔍 個股原廠第一手數據查詢")
+
+ticker_input = st.text_input("請輸入股票代號 (台股請加 .TW，例如：2330.TW)", "2330.TW")
+ticker = yf.Ticker(ticker_input)
+
+# 基本面核心三大數字指標
+try:
+    info = ticker.info
+    if info:
+        m1, m2, m3, m4 = st.columns(4)
+        with m1:
+            st.metric("目前本益比 (PE)", f"{info.get('trailingPE', '暫無')}")
+        with m2:
+            st.metric("每股盈餘 (EPS)", f"${info.get('trailingEps', '暫無')}")
+        with m3:
+            st.metric("利潤率 (Profit Margin)", f"{info.get('profitMargins', 0)*100:.2f}%" if info.get('profitMargins') else "暫無")
+        with m4:
+            st.metric("股東權益報酬率 (ROE)", f"{info.get('returnOnEquity', 0)*100:.2f}%" if info.get('returnOnEquity') else "暫無")
+except:
+    st.warning("部分即時核心指標暫時無法讀取。")
+
+# 官方檔案下載直達車
+pure_code = ticker_input.split(".")[0]
+st.markdown("#### 📂 官方原始檔案直達鏈結")
+col_link1, col_link2 = st.columns(2)
+with col_link1:
+    st.markdown(f"**🏢 台灣公開資訊觀測站 (MOPS)**\n\n[👉 點我直接進入官方網站查重大訊息](https://mops.twse.com.tw/mops/web/t05st01)")
+with col_link2:
+    st.markdown(f"**📊 官方法說會簡報 (Investor Relations)**\n\n[👉 點我直接 Google 搜尋原廠 PDF 簡報](https://www.google.com/search?q={pure_code}+Investor+Relations+法說會簡報+filetype:pdf)")
+
+# 原始大數據表格分頁
+st.markdown("#### 🏛️ 申報原始財務三表 (無任何加工處理)")
+tab1, tab2, tab3 = st.tabs(["損益表 (Income Statement)", "資產負債表 (Balance Sheet)", "現金流量表 (Cash Flow)"])
+
+with tab1:
+    st.dataframe(ticker.quarterly_financials, use_container_width=True)
+with tab2:
+    st.dataframe(ticker.quarterly_balance_sheet, use_container_width=True)
+with tab3:
+    st.dataframe(ticker.quarterly_cashflow, use_container_width=True)import streamlit as st
+import yfinance as yf
+import pandas as pd
+
+# 1. 網頁初始設定：強制開啟寬螢幕、標題與小圖示
+st.set_page_config(page_title="Phoebe 頂級投資儀表板", page_icon="📈", layout="wide")
+
+# 2. 注入自訂高級 UI/UX CSS 樣式
+st.markdown("""
+    <style>
+    /* 全域字體優化 */
+    html, body, [class*="css"] {
+        font-family: "Helvetica Neue", Helvetica, Arial, "PingFang TC", "Microsoft JhengHei", sans-serif;
+    }
+    /* 區塊容器美化 */
+    div.stBox {
+        border-radius: 12px;
+        padding: 1.5rem;
+        background-color: #1E293B;
+        border: 1px solid #334155;
+        margin-bottom: 1rem;
+    }
+    /* 頂部標題美化 */
+    .main-title {
+        font-size: 2.5rem;
+        font-weight: 800;
+        background: linear-gradient(135deg, #38BDF8, #34D399);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        margin-bottom: 0.5rem;
+    }
+    /* 副標題 */
+    .sub-title {
+        color: #94A3B8;
+        font-size: 1rem;
+        margin-bottom: 2rem;
+    }
+    </style>
+""", unsafe_allow_html=True)
+
+# 頂部精美標頭
+st.markdown('<p class="main-title">📊 Phoebe 頂級投資儀表板</p>', unsafe_allow_html=True)
+st.markdown('<p class="sub-title">全球核心資產與原廠一手財報數據追蹤</p>', unsafe_allow_html=True)
+
+# ==============================================================================
+# SECTION 1: 美股大盤指標 VOO 觀測與買進評估
+# ==============================================================================
+st.markdown("### 🇺🇸 全球大盤核心觀測 (VOO)")
+
+# 抓取 VOO 數據
+voo_ticker = yf.Ticker("VOO")
+voo_info = voo_ticker.info
+# 抓取歷史數據計算 KD 指標
+voo_hist = voo_ticker.history(period="3mo")
+
+if not voo_hist.empty:
+    # 簡略計算日 KD (9, 3, 3) 用於買進參考
+    low_9 = voo_hist['Low'].rolling(window=9).min()
+    high_9 = voo_hist['High'].rolling(window=9).max()
+    rsv = ((voo_hist['Close'] - low_9) / (high_9 - low_9)) * 100
+    
+    k_list = []
+    d_list = []
+    current_k = 50
+    current_d = 50
+    for r in rsv:
+        if pd.isna(r):
+            k_list.append(None)
+            d_list.append(None)
+        else:
+            current_k = (2/3) * current_k + (1/3) * r
+            current_d = (2/3) * current_d + (1/3) * current_k
+            k_list.append(current_k)
+            d_list.append(current_d)
+            
+    latest_k = current_k
+    latest_d = current_d
+    
+    # 計算漲跌
+    current_price = voo_hist['Close'].iloc[-1]
+    prev_price = voo_hist['Close'].iloc[-2]
+    price_change = current_price - prev_price
+    price_change_pct = (price_change / prev_price) * 100
+    
+    # 決定買進建議資訊
+    if latest_k < 20:
+        action_status = "🔥 買進訊號強烈 (KD低檔超賣)"
+        action_color = "red"
+        action_desc = "目前 VOO 技術指標處於低檔相對安全區，通常為中長期投資人進場的黃金時機。"
+    elif latest_k > 80:
+        action_status = "⚠️ 暫緩追高 (KD高檔超買)"
+        action_color = "orange"
+        action_desc = "目前技術指標處於高檔過熱區，建議若無急迫性可靜待拉回再布局。"
+    else:
+        action_status = "⚖️ 穩定配置區 (KD訊號中性)"
+        action_color = "green"
+        action_desc = "目前指數運作正常，處於合理波動範圍。適合實施定時定額或按原計畫分批布局。"
+
+    # VOO 資訊卡片區
+    c1, c2, c3 = st.columns([1, 1, 2])
+    with c1:
+        st.metric(
+            label="VOO 最新股價", 
+            value=f"${current_price:.2f}", 
+            delta=f"{price_change:+.2f} ({price_change_pct:+.2f}%)"
+        )
+    with c2:
+        st.metric(
+            label="技術指標 (日K / 日D)", 
+            value=f"{latest_k:.1f} / {latest_d:.1f}"
+        )
+    with c3:
+        # 使用 HTML 渲染好看的買進狀態盒
+        st.markdown(
+            f"""
+            <div style="background-color: #0F172A; border-left: 5px solid {action_color}; padding: 12px; border-radius: 6px;">
+                <b style="font-size: 1.1rem; color: white;">目前操作評估：{action_status}</b><br>
+                <span style="font-size: 0.9rem; color: #94A3B8;">{action_desc}</span>
+            </div>
+            """, 
+            unsafe_allow_html=True
+        )
+else:
+    st.error("無法取得 VOO 即時數據，請稍後再試。")
+
+st.markdown("<br><hr style='border-color: #334155;'><br>", unsafe_allow_html=True)
+
+# ==============================================================================
+# SECTION 2: 個股原廠第一手財報數據
+# ==============================================================================
+st.markdown("### 🔍 個股原廠第一手數據查詢")
+
+ticker_input = st.text_input("請輸入股票代號 (台股請加 .TW，例如：2330.TW)", "2330.TW")
+ticker = yf.Ticker(ticker_input)
+
+# 基本面核心三大數字指標
+try:
+    info = ticker.info
+    if info:
+        m1, m2, m3, m4 = st.columns(4)
+        with m1:
+            st.metric("目前本益比 (PE)", f"{info.get('trailingPE', '暫無')}")
+        with m2:
+            st.metric("每股盈餘 (EPS)", f"${info.get('trailingEps', '暫無')}")
+        with m3:
+            st.metric("利潤率 (Profit Margin)", f"{info.get('profitMargins', 0)*100:.2f}%" if info.get('profitMargins') else "暫無")
+        with m4:
+            st.metric("股東權益報酬率 (ROE)", f"{info.get('returnOnEquity', 0)*100:.2f}%" if info.get('returnOnEquity') else "暫無")
+except:
+    st.warning("部分即時核心指標暫時無法讀取。")
+
+# 官方檔案下載直達車
+pure_code = ticker_input.split(".")[0]
+st.markdown("#### 📂 官方原始檔案直達鏈結")
+col_link1, col_link2 = st.columns(2)
+with col_link1:
+    st.markdown(f"**🏢 台灣公開資訊觀測站 (MOPS)**\n\n[👉 點我直接進入官方網站查重大訊息](https://mops.twse.com.tw/mops/web/t05st01)")
+with col_link2:
+    st.markdown(f"**📊 官方法說會簡報 (Investor Relations)**\n\n[👉 點我直接 Google 搜尋原廠 PDF 簡報](https://www.google.com/search?q={pure_code}+Investor+Relations+法說會簡報+filetype:pdf)")
+
+# 原始大數據表格分頁
+st.markdown("#### 🏛️ 申報原始財務三表 (無任何加工處理)")
+tab1, tab2, tab3 = st.tabs(["損益表 (Income Statement)", "資產負債表 (Balance Sheet)", "現金流量表 (Cash Flow)"])
+
+with tab1:
+    st.dataframe(ticker.quarterly_financials, use_container_width=True)
+with tab2:
+    st.dataframe(ticker.quarterly_balance_sheet, use_container_width=True)
+with tab3:
+    st.dataframe(ticker.quarterly_cashflow, use_container_width=True)
